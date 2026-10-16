@@ -12,7 +12,7 @@ const ITEMS = [
   { id: "perfil", icon: "person" },
 ];
 
-export default function BottomNav({ screen, onNav, compact }) {
+export default function BottomNav({ screen, onNav, compact, badges = {} }) {
   const { colors } = useTheme();
   const styles = useStyles(createStyles);
   const insets = useSafeAreaInsets();
@@ -28,6 +28,7 @@ export default function BottomNav({ screen, onNav, compact }) {
             <TouchableOpacity key={id} onPress={() => onNav(id)} style={styles.item}>
               <View style={[styles.iconWrap, active && { backgroundColor: colors.bg }]}>
                 <Ionicons name={active ? icon : `${icon}-outline`} size={20} color={active ? colors.ink : colors.inkFaint} />
+                {badges[id] && <View style={styles.dot} />}
               </View>
             </TouchableOpacity>
           );
@@ -46,4 +47,5 @@ const createStyles = (c) => StyleSheet.create({
   },
   item: { marginHorizontal: 2 },
   iconWrap: { width: 46, height: 36, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  dot: { position: "absolute", top: 5, right: 9, width: 10, height: 10, borderRadius: 999, backgroundColor: "#E53950", borderWidth: 1.5, borderColor: c.surface },
 });

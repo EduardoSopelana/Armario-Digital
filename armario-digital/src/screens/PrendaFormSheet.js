@@ -5,7 +5,7 @@ import Text from "../components/Text";
 import { Sheet, FieldLabel, PrimaryButton, GhostButton, Pill, useInputStyle } from "../components/UI";
 import Foto from "../components/Foto";
 import { CATEGORIAS, TIPOS_POR_CATEGORIA, ESTACIONES, COLORES, uid } from "../constants";
-import { guardarImagen } from "../images";
+import { aBase64Reducida } from "../images";
 import { useTheme, useStyles } from "../theme";
 
 export default function PrendaFormSheet({ visible, initial, onSave, onClose }) {
@@ -21,6 +21,7 @@ export default function PrendaFormSheet({ visible, initial, onSave, onClose }) {
   const [estaciones, setEstaciones] = useState(initial?.estaciones || []);
   const [descripcion, setDescripcion] = useState(initial?.descripcion || "");
   const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   const handleCategoria = (cat) => {
     setCategoria(cat);
@@ -46,22 +47,30 @@ export default function PrendaFormSheet({ visible, initial, onSave, onClose }) {
     // La "versión estudio" con IA se añadirá en una fase posterior, conectada a un servicio real.
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!nombre.trim()) { setError("Escribe un nombre para la prenda."); return; }
     if (estaciones.length === 0) { setError("Selecciona al menos una estación."); return; }
     setError("");
-    onSave({
-      id: initial?.id || uid(),
-      nombre: nombre.trim(),
-      foto: guardarImagen(foto), // copia la foto a la carpeta permanente de la app
-      categoria,
-      tipo,
-      color,
-      estaciones,
-      descripcion: descripcion.trim(),
-      favorito: initial?.favorito || false,
-      fechaCreacion: initial?.fechaCreacion || new Date().toISOString(),
-    });
+    setGuardando(true);
+    try {
+      // La foto se reduce para que quepa en la nube (si no se ha cambiado, se queda como está)
+      const fotoFinal = foto ? await aBase64Reducida(foto) : null;
+      onSave({
+        id: initial?.id || uid(),
+        nombre: nombre.trim(),
+        foto: fotoFinal,
+        categoria,
+        tipo,
+        color,
+        estaciones,
+        descripcion: descripcion.trim(),
+        favorito: initial?.favorito || false,
+        fechaCreacion: initial?.fechaCreacion || new Date().toISOString(),
+      });
+    } catch (e) {
+      setError("No se pudo procesar la foto. Prueba con otra imagen.");
+      setGuardando(false);
+    }
   };
 
   return (
@@ -119,7 +128,7 @@ export default function PrendaFormSheet({ visible, initial, onSave, onClose }) {
 
       <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
         <GhostButton onPress={onClose} style={{ flex: 1 }}>Cancelar</GhostButton>
-        <PrimaryButton onPress={handleSubmit} style={{ flex: 1 }}>Guardar prenda</PrimaryButton>
+        <PrimaryButton onPress={handleSubmit} disabled={guardando} style={{ flex: 1 }}>{guardando ? "Guardando..." : "Guardar prenda"}</PrimaryButton>
       </View>
     </Sheet>
   );

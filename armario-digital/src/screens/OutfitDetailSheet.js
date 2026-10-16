@@ -7,7 +7,9 @@ import Foto from "../components/Foto";
 import { CAT_LABEL } from "../constants";
 import { useTheme, useStyles } from "../theme";
 
-// Se muestra solo cuando hay un conjunto abierto (App.js lo monta/desmonta).
+// Detalle de un conjunto. Se muestra solo cuando hay uno abierto (quien lo usa lo monta/desmonta).
+// Los botones de favorito / editar / eliminar solo aparecen si se pasan sus funciones:
+// sin ellas es una vista de solo lectura (la que se usa al ver los conjuntos de otra persona).
 export default function OutfitDetailSheet({ conjunto, prendas, onClose, onEdit, onDelete, onToggleFavorito }) {
   const { colors } = useTheme();
   const styles = useStyles(createStyles);
@@ -17,13 +19,15 @@ export default function OutfitDetailSheet({ conjunto, prendas, onClose, onEdit, 
     <Sheet title={conjunto.nombre} onClose={onClose}>
       <View style={styles.subRow}>
         <Text style={[styles.sub, { flex: 1 }]}>{conjunto.estacion}{conjunto.descripcion ? ` · ${conjunto.descripcion}` : ""}</Text>
-        <TouchableOpacity onPress={() => onToggleFavorito(conjunto.id)} hitSlop={10}>
-          <Ionicons
-            name={conjunto.favorito ? "heart" : "heart-outline"}
-            size={22}
-            color={conjunto.favorito ? colors.heart : colors.inkFaint}
-          />
-        </TouchableOpacity>
+        {!!onToggleFavorito && (
+          <TouchableOpacity onPress={() => onToggleFavorito(conjunto.id)} hitSlop={10}>
+            <Ionicons
+              name={conjunto.favorito ? "heart" : "heart-outline"}
+              size={22}
+              color={conjunto.favorito ? colors.heart : colors.inkFaint}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.grid}>
@@ -37,10 +41,14 @@ export default function OutfitDetailSheet({ conjunto, prendas, onClose, onEdit, 
         {items.length === 0 && <Text style={styles.sub}>Las prendas de este conjunto ya no están disponibles.</Text>}
       </View>
 
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-        <GhostButton onPress={onEdit} icon="create-outline" style={{ flex: 1 }}>Editar</GhostButton>
-        <GhostButton onPress={onDelete} icon="trash-outline" iconColor={colors.danger} textStyle={{ color: colors.danger }} style={{ flex: 1, borderColor: colors.dangerSoft }}>Eliminar</GhostButton>
-      </View>
+      {(!!onEdit || !!onDelete) && (
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+          {!!onEdit && <GhostButton onPress={onEdit} icon="create-outline" style={{ flex: 1 }}>Editar</GhostButton>}
+          {!!onDelete && (
+            <GhostButton onPress={onDelete} icon="trash-outline" iconColor={colors.danger} textStyle={{ color: colors.danger }} style={{ flex: 1, borderColor: colors.dangerSoft }}>Eliminar</GhostButton>
+          )}
+        </View>
+      )}
     </Sheet>
   );
 }

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Text from "../components/Text";
 import Swatches from "../components/Swatches";
+import Avatar from "../components/Avatar";
 import OutfitThumb from "../components/OutfitThumb";
 import { TopBar, Pill, EmptyState, Sheet, useInputStyle } from "../components/UI";
 import { getUsersByIds } from "../services/friendsService";
@@ -119,7 +120,7 @@ function Hilo({ amigo, mensajes, prendas, conjuntos, onEnviar, onBack }) {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12, gap: 10, flexGrow: 1 }}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={
-          <Text style={styles.vacio}>Envía un mensaje o comparte un conjunto con {amigo.nombre}.</Text>
+          <Text style={styles.vacio}>Envía un mensaje o comparte un conjunto con {amigo.nombre}.{"\n\n"}Por ahora los mensajes solo se guardan en tu móvil: llegarán a tus amigos en la siguiente fase.</Text>
         }
         renderItem={({ item: m }) => (
           <View style={{ alignItems: m.de === "yo" ? "flex-end" : "flex-start" }}>
@@ -188,14 +189,14 @@ export default function MensajesScreen({ amigos, mensajes, prendas, conjuntos, o
     <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
       <TopBar title="Mensajes" onBack={onBack} />
       {misAmigos.length === 0 ? (
-        <EmptyState icon="chatbubble-outline" text="Añade amigos desde tu perfil para poder enviarles mensajes y conjuntos." />
+        <EmptyState icon="chatbubble-outline" text="Cuando sigas a alguien (o alguien te siga) y la solicitud esté aceptada, podrás escribirle desde aquí." />
       ) : (
         <View style={{ gap: 10 }}>
           {misAmigos.map((f) => {
             const ultimo = (mensajes[f.id] || []).slice(-1)[0];
             return (
               <TouchableOpacity key={f.id} style={styles.fila} onPress={() => setHilo(f)}>
-                <View style={styles.avatar}><Ionicons name="person" size={18} color={colors.accent} /></View>
+                <Avatar foto={f.foto} size={42} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.nombre}>{f.nombre}</Text>
                   <Text style={styles.preview} numberOfLines={1}>{ultimo ? (ultimo.texto || "Conjunto compartido") : `@${f.alias}`}</Text>

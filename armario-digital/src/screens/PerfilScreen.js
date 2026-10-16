@@ -1,23 +1,28 @@
 import React, { useState } from "react";
-import { View, Image, ScrollView, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, ScrollView, StyleSheet } from "react-native";
 import Text from "../components/Text";
+import Avatar from "../components/Avatar";
 import { TopBar } from "../components/UI";
 import { MenuRow, Card } from "../components/MenuRow";
 import AmigosScreen from "./AmigosScreen";
+import PerfilAmigoScreen from "./PerfilAmigoScreen";
 import ConfigScreen from "./ConfigScreen";
 import { CATEGORIAS } from "../constants";
-import { resolverFoto } from "../images";
-import { useTheme, useStyles } from "../theme";
+import { useStyles } from "../theme";
 
-// Menú de perfil con tres submenús: Prendas por categoría, Amigos y Configuración
+// Menú de perfil con tres submenús: Prendas por categoría, Amigos y Configuración.
+// App.js lo vuelve a montar al pulsar el botón de Perfil de la barra inferior, así siempre
+// se vuelve al menú principal.
 export default function PerfilScreen({
-  prendas, conjuntos, usuario, amigos,
-  onVerCategoria, onToggleAmigo, onActualizarUsuario, onCerrarSesion, onReset,
+  prendas, conjuntos, usuario, relaciones, pendientes, miUid,
+  onVerCategoria, onActualizarUsuario, onCerrarSesion, onReset,
 }) {
-  const { colors } = useTheme();
   const styles = useStyles(createStyles);
   const [vista, setVista] = useState("menu");
+  const [perfilAbierto, setPerfilAbierto] = useState(null); // perfil de otra persona, a pantalla completa
+
+  const numSiguiendo = relaciones.filter((r) => r.yoSigo === "accepted").length;
+  const numSeguidores = relaciones.filter((r) => r.meSigue === "accepted").length;
 
   if (vista === "categorias") {
     return (
@@ -41,7 +46,23 @@ export default function PerfilScreen({
   }
 
   if (vista === "amigos") {
-    return <AmigosScreen amigos={amigos} onToggleAmigo={onToggleAmigo} onBack={() => setVista("menu")} />;
+    // La lista de amigos se mantiene montada (oculta) mientras se ve un perfil,
+    // así al volver atrás sigues en la misma pestaña y con la misma búsqueda.
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, display: perfilAbierto ? "none" : "flex" }}>
+          <AmigosScreen relaciones={relaciones} miUid={miUid} onAbrirPerfil={setPerfilAbierto} onBack={() => setVista("menu")} />
+        </View>
+        {!!perfilAbierto && (
+          <PerfilAmigoScreen
+            perfil={perfilAbierto}
+            rel={relaciones.find((r) => r.otroUid === perfilAbierto.id)}
+            miUid={miUid}
+            onBack={() => setPerfilAbierto(null)}
+          />
+        )}
+      </View>
+    );
   }
 
   if (vista === "config") {
@@ -57,11 +78,7 @@ export default function PerfilScreen({
     <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
       <TopBar title="Perfil" />
       <View style={styles.header}>
-        <View style={styles.avatar}>
-          {usuario?.foto
-            ? <Image source={{ uri: resolverFoto(usuario.foto) }} style={{ width: "100%", height: "100%" }} />
-            : <Ionicons name="person" size={24} color={colors.accent} />}
-        </View>
+        <Avatar foto={usuario?.foto} size={56} />
         <View style={{ flex: 1 }}>
           <Text style={styles.nombre}>{usuario?.nombre || "Mi cuenta"}</Text>
           <Text style={styles.sub}>@{usuario?.alias} · {prendas.length} prendas · {conjuntos.length} conjuntos</Text>
@@ -70,7 +87,12 @@ export default function PerfilScreen({
 
       <Card>
         <MenuRow icon="grid-outline" label="Prendas por categoría" sub="Organiza y accede por tipo" onPress={() => setVista("categorias")} />
-        <MenuRow icon="people-outline" label="Amigos" sub={`${amigos.length} ${amigos.length === 1 ? "amigo" : "amigos"} · buscar y ver conjuntos`} onPress={() => setVista("amigos")} />
+        <MenuRow
+          icon="people-outline" label="Amigos"
+          sub={`${numSiguiendo} siguiendo · ${numSeguidores} ${numSeguidores === 1 ? "seguidor" : "seguidores"}${pendientes > 0 ? ` · ${pendientes} ${pendientes === 1 ? "solicitud" : "solicitudes"}` : ""}`}
+          badge={pendientes > 0 ? pendientes : undefined}
+          onPress={() => setVista("amigos")}
+        />
         <MenuRow icon="settings-outline" label="Configuración" sub="Tema, privacidad, cuenta" onPress={() => setVista("config")} last />
       </Card>
     </ScrollView>
@@ -80,7 +102,6 @@ export default function PerfilScreen({
 const createStyles = (c) => StyleSheet.create({
   help: { color: c.inkSoft, fontSize: 13.5, marginBottom: 16 },
   header: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 26 },
-  avatar: { width: 56, height: 56, borderRadius: 999, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   nombre: { fontSize: 16, fontWeight: "500", color: c.ink },
   sub: { fontSize: 13, color: c.inkSoft, marginTop: 2 },
 });

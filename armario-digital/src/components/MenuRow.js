@@ -5,7 +5,7 @@ import Text from "./Text";
 import { useTheme, useStyles } from "../theme";
 
 // Fila de menú con icono, título, subtítulo y flecha
-export function MenuRow({ icon, label, sub, onPress, last }) {
+export function MenuRow({ icon, label, sub, onPress, last, badge }) {
   const { colors } = useTheme();
   const styles = useStyles(createStyles);
   return (
@@ -17,6 +17,7 @@ export function MenuRow({ icon, label, sub, onPress, last }) {
         <Text style={styles.label}>{label}</Text>
         {!!sub && <Text style={styles.sub}>{sub}</Text>}
       </View>
+      {!!badge && <View style={styles.badge}><Text style={styles.badgeText}>{badge}</Text></View>}
       <Ionicons name="chevron-forward" size={16} color={colors.inkFaint} />
     </TouchableOpacity>
   );
@@ -50,4 +51,6 @@ const createStyles = (c) => StyleSheet.create({
   iconBox: { width: 34, height: 34, borderRadius: 10, backgroundColor: c.accentSofter, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 14.5, fontWeight: "500", color: c.ink },
   sub: { fontSize: 12, color: c.inkSoft, marginTop: 1 },
+  badge: { minWidth: 20, height: 20, borderRadius: 999, backgroundColor: "#E53950", alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  badgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "600" },
 });

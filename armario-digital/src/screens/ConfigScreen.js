@@ -5,7 +5,6 @@ import Text from "../components/Text";
 import { TopBar, Pill, PrimaryButton, GhostButton, FieldLabel, Sheet, useInputStyle } from "../components/UI";
 import { MenuRow, SwitchRow, Card } from "../components/MenuRow";
 import { confirmarAccion } from "../confirm";
-import { guardarImagen, borrarImagen } from "../images";
 import { changePassword, validarAlias, normalizarAlias } from "../services/authService";
 import { useTheme } from "../theme";
 
@@ -41,11 +40,7 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
     const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permiso.granted) { Alert.alert("Permiso necesario", "Necesitamos acceso a tu galería para cambiar la foto."); return; }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, allowsEditing: true, aspect: [1, 1] });
-    if (!res.canceled) {
-      const nueva = guardarImagen(res.assets[0].uri);
-      const guardada = await actualizar({ foto: nueva });
-      if (guardada) borrarImagen(usuario.foto);
-    }
+    if (!res.canceled) await actualizar({ foto: res.assets[0].uri });
   };
 
   const abrirAlias = () => { setAlias(usuario.alias); setErrorAlias(""); setEditando("alias"); };
@@ -100,7 +95,7 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
       <Card style={{ marginBottom: 22 }}>
         <SwitchRow
           label="Perfil público"
-          sub="Quien busque tu alias puede ver tus conjuntos"
+          sub="Si lo desactivas, solo quienes te sigan podrán ver tus conjuntos"
           value={usuario.privacidadConjuntos === "publico"}
           onChange={(v) => actualizar({ privacidadConjuntos: v ? "publico" : "privado" })}
           last
@@ -144,7 +139,7 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
         </GhostButton>
         <GhostButton
           icon="trash-outline" iconColor={colors.danger} textStyle={{ color: colors.danger }} style={{ borderColor: colors.dangerSoft }}
-          onPress={() => confirmarAccion({ titulo: "Borrar todos los datos", mensaje: "Esto eliminará todas tus prendas y conjuntos guardados en este dispositivo. Esta acción no se puede deshacer.", textoConfirmar: "Borrar todo", destructivo: true, onConfirm: onReset })}
+          onPress={() => confirmarAccion({ titulo: "Borrar todos los datos", mensaje: "Esto eliminará todas las prendas y conjuntos de tu cuenta, también de la nube. Esta acción no se puede deshacer.", textoConfirmar: "Borrar todo", destructivo: true, onConfirm: onReset })}
         >
           Borrar todos los datos
         </GhostButton>

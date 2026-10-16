@@ -14,6 +14,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc, writeBatch, runTransaction, serverTimestamp } from "firebase/firestore";
 import { auth, db, firebaseConfigurado } from "../firebase";
 import { getJSON, setJSON, removeKey } from "../storage";
+import { aBase64Reducida } from "../images";
 
 const CACHE = "perfilCache"; // último perfil conocido (para abrir la app sin conexión)
 const NOTIF_POR_DEFECTO = { prendaAmigo: true, mensajes: true };
@@ -59,10 +60,9 @@ export function validarAlias(alias) {
 
 /* ---------- perfil ---------- */
 async function cargarPerfil(user) {
-  const [pub, priv, foto] = await Promise.all([
+  const [pub, priv] = await Promise.all([
     getDoc(doc(db, "users", user.uid)),
     getDoc(doc(db, "users", user.uid, "private", "settings")),
-    getJSON(`fotoPerfil_${user.uid}`, null), // la foto de perfil se sincronizará en la fase de datos en la nube
   ]);
   if (!pub.exists()) throw err("PERFIL_NO_ENCONTRADO");
   const d = pub.data();
@@ -71,7 +71,7 @@ async function cargarPerfil(user) {
     nombre: d.nombre,
     alias: d.alias,
     email: user.email,
-    foto,
+    foto: d.foto || null, // miniatura guardada en el perfil público
     authMethod: "email",
     privacidadConjuntos: d.privacidadConjuntos || "publico",
     dosPasos: false, // la verificación en dos pasos real llegará más adelante
@@ -214,10 +214,6 @@ export async function updateProfile(perfil, cambios) {
   const uid = perfil.id;
   const nuevo = { ...perfil };
   try {
-    if ("foto" in cambios) {
-      await setJSON(`fotoPerfil_${uid}`, cambios.foto);
-      nuevo.foto = cambios.foto;
-    }
     if (cambios.alias && cambios.alias !== perfil.alias) {
       const errAlias = validarAlias(cambios.alias);
       if (errAlias) throw err(errAlias);
@@ -225,6 +221,9 @@ export async function updateProfile(perfil, cambios) {
       nuevo.alias = cambios.alias;
     }
     const publicos = {};
+    if (cambios.foto !== undefined) {
+      publicos.foto = cambios.foto ? await aBase64Reducida(cambios.foto, { ancho: 256, calidad: 0.6 }) : null;
+    }
     if (cambios.nombre !== undefined) publicos.nombre = cambios.nombre;
     if (cambios.privacidadConjuntos !== undefined) publicos.privacidadConjuntos = cambios.privacidadConjuntos;
     if (Object.keys(publicos).length > 0) {
