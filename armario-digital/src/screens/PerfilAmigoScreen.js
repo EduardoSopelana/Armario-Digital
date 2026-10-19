@@ -4,9 +4,10 @@ import Text from "../components/Text";
 import Avatar from "../components/Avatar";
 import OutfitThumb from "../components/OutfitThumb";
 import OutfitDetailSheet from "./OutfitDetailSheet";
+import { BotonRedondo } from "../components/PersonaRow";
 import { TopBar, EmptyState, PrimaryButton, GhostButton } from "../components/UI";
 import { confirmarAccion } from "../confirm";
-import { seguir, dejarDeSeguir } from "../services/friendsService";
+import { seguir, dejarDeSeguir, aceptarSeguidor, quitarSeguidor } from "../services/friendsService";
 import { escucharPrendas, escucharConjuntos } from "../services/wardrobeService";
 import { useTheme, useStyles } from "../theme";
 
@@ -25,6 +26,7 @@ export default function PerfilAmigoScreen({ perfil, rel, miUid, onBack }) {
   const [ocupado, setOcupado] = useState(false);
 
   const yoSigo = rel?.yoSigo || null;
+  const meSigue = rel?.meSigue || null;
 
   // Si el perfil es privado y no le sigo, las reglas de Firestore rechazan la lectura.
   // Se vuelve a escuchar cuando cambia mi relación (por ejemplo, al aceptar mi solicitud).
@@ -69,18 +71,33 @@ export default function PerfilAmigoScreen({ perfil, rel, miUid, onBack }) {
     }
   };
 
+  const seguirTambien = meSigue === "accepted";
+
   const cabecera = (
     <View style={styles.cabecera}>
       <Avatar foto={perfil.foto} size={72} />
       <Text style={styles.nombre}>{perfil.nombre}</Text>
-      <Text style={styles.alias}>@{perfil.alias}{rel?.meSigue === "accepted" ? " · te sigue" : ""}</Text>
+      <Text style={styles.alias}>@{perfil.alias}{seguirTambien ? " · te sigue" : ""}</Text>
+
+      {meSigue === "pending" && (
+        <View style={styles.banner}>
+          <Text style={styles.bannerTexto}>@{perfil.alias} quiere seguirte</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <BotonRedondo icon="checkmark" relleno disabled={ocupado} onPress={() => ejecutar(() => aceptarSeguidor(miUid, perfil.id))} />
+            <BotonRedondo icon="close" disabled={ocupado} onPress={() => ejecutar(() => quitarSeguidor(miUid, perfil.id))} />
+          </View>
+        </View>
+      )}
+
       <View style={{ width: "100%", marginTop: 14 }}>
         {yoSigo === "accepted" ? (
           <GhostButton icon="checkmark" onPress={pulsarSeguir}>Siguiendo</GhostButton>
         ) : yoSigo === "pending" ? (
           <GhostButton icon="time-outline" onPress={pulsarSeguir}>Solicitud enviada</GhostButton>
         ) : (
-          <PrimaryButton icon="person-add-outline" onPress={pulsarSeguir} disabled={ocupado}>Seguir</PrimaryButton>
+          <PrimaryButton icon={seguirTambien ? "repeat" : "person-add-outline"} onPress={pulsarSeguir} disabled={ocupado}>
+            {seguirTambien ? "Seguir también" : "Seguir"}
+          </PrimaryButton>
         )}
       </View>
       <Text style={styles.seccion}>Conjuntos</Text>
@@ -129,4 +146,6 @@ const createStyles = (c) => StyleSheet.create({
   nombre: { fontSize: 20, fontWeight: "500", color: c.ink, fontFamily: "display", marginTop: 10 },
   alias: { fontSize: 13, color: c.inkSoft, marginTop: 2 },
   seccion: { alignSelf: "flex-start", fontSize: 18, fontWeight: "500", color: c.ink, fontFamily: "display", marginTop: 22 },
+  banner: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: c.accentSofter, borderWidth: 1, borderColor: c.accentSoft },
+  bannerTexto: { fontSize: 13.5, fontWeight: "500", color: c.ink, flex: 1, marginRight: 10 },
 });

@@ -2,7 +2,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import Text from "../components/Text";
 import { Sheet, GhostButton, HeartButton } from "../components/UI";
-import Foto from "../components/Foto";
+import FotoZoom from "../components/FotoZoom";
 import { CAT_LABEL, COLOR_HEX } from "../constants";
 import { useTheme, useStyles } from "../theme";
 
@@ -13,7 +13,7 @@ export default function ItemDetailSheet({ prenda, onClose, onEdit, onDelete, onT
   return (
     <Sheet title="Detalle de la prenda" onClose={onClose}>
       <View style={{ width: 180, alignSelf: "center", marginBottom: 16 }}>
-        <Foto uri={prenda.foto} ratio={1} radius={18} />
+        <FotoZoom uri={prenda.foto} ratio={1} radius={18} />
         <HeartButton favorito={prenda.favorito} onPress={() => onToggleFavorito(prenda.id)} size={34} iconSize={17} />
       </View>
       <Text style={styles.nombre}>{prenda.nombre}</Text>

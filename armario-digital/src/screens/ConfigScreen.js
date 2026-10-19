@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, TextInput, ScrollView, Alert } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import { pedirFoto } from "../imagePicker";
 import Text from "../components/Text";
 import { TopBar, Pill, PrimaryButton, GhostButton, FieldLabel, Sheet, useInputStyle } from "../components/UI";
 import { MenuRow, SwitchRow, Card } from "../components/MenuRow";
@@ -37,10 +37,8 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
   };
 
   const cambiarFoto = async () => {
-    const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permiso.granted) { Alert.alert("Permiso necesario", "Necesitamos acceso a tu galería para cambiar la foto."); return; }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, allowsEditing: true, aspect: [1, 1] });
-    if (!res.canceled) await actualizar({ foto: res.assets[0].uri });
+    const uri = await pedirFoto("Foto de perfil"); // pregunta: cámara o galería
+    if (uri) await actualizar({ foto: uri });
   };
 
   const abrirAlias = () => { setAlias(usuario.alias); setErrorAlias(""); setEditando("alias"); };
@@ -86,7 +84,7 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
 
       <FieldLabel>Cuenta</FieldLabel>
       <Card style={{ marginBottom: 22 }}>
-        <MenuRow icon="camera-outline" label="Cambiar foto de perfil" sub="Desde la galería" onPress={cambiarFoto} />
+        <MenuRow icon="camera-outline" label="Cambiar foto de perfil" sub="Galería o cámara" onPress={cambiarFoto} />
         <MenuRow icon="person-outline" label="Cambiar alias" sub={`@${usuario.alias}`} onPress={abrirAlias} />
         <MenuRow icon="key-outline" label="Contraseña y seguridad" sub={usuario.email} onPress={abrirPassword} last />
       </Card>

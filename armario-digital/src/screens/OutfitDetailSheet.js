@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Text from "../components/Text";
 import { Sheet, GhostButton } from "../components/UI";
-import Foto from "../components/Foto";
+import FotoZoom from "../components/FotoZoom";
 import { CAT_LABEL } from "../constants";
 import { useTheme, useStyles } from "../theme";
 
@@ -33,7 +33,7 @@ export default function OutfitDetailSheet({ conjunto, prendas, onClose, onEdit, 
       <View style={styles.grid}>
         {items.map((p) => (
           <View key={p.id} style={{ width: "47%" }}>
-            <Foto uri={p.foto} />
+            <FotoZoom uri={p.foto} />
             <Text style={styles.itemNombre}>{p.nombre}</Text>
             <Text style={styles.itemCat}>{CAT_LABEL[p.categoria]}</Text>
           </View>

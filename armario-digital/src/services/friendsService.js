@@ -27,7 +27,7 @@ function aPerfil(uid, d) {
 
 /* ---------- lectura ---------- */
 // Escucha en tiempo real mis relaciones con cada persona. Devuelve una lista de
-//   { otroUid, yoSigo: null | "pending" | "accepted", meSigue: null | "pending" | "accepted" }
+//   { otroUid, yoSigo, meSigue, fechaYoSigo, fechaMeSigue }   (estados: null | "pending" | "accepted")
 // "yoSigo": yo le sigo (o le he pedido seguirle). "meSigue": me sigue (o me ha pedido seguirme).
 export function escucharRelaciones(miUid, onData, onError) {
   const q = query(collection(db, "follows"), where("users", "array-contains", miUid));
@@ -39,9 +39,10 @@ export function escucharRelaciones(miUid, onData, onError) {
         const data = d.data();
         const yoSoySeguidor = data.follower === miUid;
         const otroUid = yoSoySeguidor ? data.followed : data.follower;
-        const rel = porPersona.get(otroUid) || { otroUid, yoSigo: null, meSigue: null };
-        if (yoSoySeguidor) rel.yoSigo = data.status;
-        else rel.meSigue = data.status;
+        const fecha = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+        const rel = porPersona.get(otroUid) || { otroUid, yoSigo: null, meSigue: null, fechaYoSigo: 0, fechaMeSigue: 0 };
+        if (yoSoySeguidor) { rel.yoSigo = data.status; rel.fechaYoSigo = fecha; }
+        else { rel.meSigue = data.status; rel.fechaMeSigue = fecha; }
         porPersona.set(otroUid, rel);
       });
       onData([...porPersona.values()]);
@@ -83,19 +84,25 @@ export async function obtenerPerfiles(uids) {
 export const getUsersByIds = obtenerPerfiles;
 
 /* ---------- acciones ---------- */
-// Pedir seguir a alguien (él tendrá que aceptar)
+// Seguir a alguien. Si su perfil es público se le sigue al instante ("accepted");
+// si es privado se envía una solicitud ("pending") que él tendrá que aceptar. Devuelve el estado.
 export async function seguir(miUid, otroUid) {
   if (miUid === otroUid) throw errorPropio("No puedes seguirte a ti mismo.");
   try {
+    const perfil = await getDoc(doc(db, "users", otroUid)); // se lee en el momento, no de la memoria
+    if (!perfil.exists()) throw errorPropio("Esa persona ya no existe.");
+    aPerfil(otroUid, perfil.data());
+    const status = (perfil.data().privacidadConjuntos || "publico") === "publico" ? "accepted" : "pending";
     await conTiempo(
       setDoc(doc(db, "follows", idSeguimiento(miUid, otroUid)), {
         users: [miUid, otroUid],
         follower: miUid,
         followed: otroUid,
-        status: "pending",
+        status,
         createdAt: serverTimestamp(),
       })
     );
+    return status;
   } catch (e) {
     throw traducirFirestore(e);
   }
