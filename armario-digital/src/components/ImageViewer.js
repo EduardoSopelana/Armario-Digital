@@ -39,17 +39,32 @@ function Visor({ uri, onClose }) {
       y.value = withTiming(yGuardada.value);
     });
 
-  // Arrastrar para moverse por la foto (solo cuando está ampliada)
+  // Arrastrar: con zoom, se mueve por la foto; sin zoom, tira de ella hacia abajo (para salir)
   const arrastre = Gesture.Pan()
     .onUpdate((e) => {
       if (escala.value > 1) {
         x.value = limitar(xGuardada.value + e.translationX, escala.value, width);
         y.value = limitar(yGuardada.value + e.translationY, escala.value, height);
+      } else {
+        y.value = Math.max(0, e.translationY);
       }
     })
     .onEnd(() => {
-      xGuardada.value = x.value;
-      yGuardada.value = y.value;
+      if (escala.value > 1) {
+        xGuardada.value = x.value;
+        yGuardada.value = y.value;
+      } else {
+        y.value = withTiming(0);
+      }
+    });
+
+  // Deslizar el dedo hacia abajo sin zoom cierra la foto
+  const cerrar = Gesture.Pan()
+    .runOnJS(true)
+    .onEnd((e) => {
+      const sinZoom = escala.value <= 1.05;
+      const vertical = Math.abs(e.translationY) > Math.abs(e.translationX);
+      if (sinZoom && vertical && (e.translationY > 110 || e.velocityY > 900)) onClose();
     });
 
   // Doble toque: acerca o vuelve al tamaño normal
@@ -69,7 +84,7 @@ function Visor({ uri, onClose }) {
       }
     });
 
-  const gesto = Gesture.Simultaneous(pellizco, arrastre, dobleToque);
+  const gesto = Gesture.Simultaneous(pellizco, arrastre, cerrar, dobleToque);
 
   const estilo = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: escala.value }],

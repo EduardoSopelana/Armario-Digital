@@ -73,9 +73,9 @@ export function migrarPrendas(prendas) {
 // Reduce una foto y la devuelve como "data URI" (texto) lista para guardar dentro de Firestore.
 // 640 px de ancho y calidad 0.6 -> unos 40-90 KB, muy por debajo del límite de 1 MB por documento.
 // Si ya es un data URI, se devuelve tal cual.
-export async function aBase64Reducida(uri, { ancho = 640, calidad = 0.6 } = {}) {
+export async function aBase64Reducida(uri, { ancho = 640, calidad = 0.6, forzar = false } = {}) {
   if (!uri) return null;
-  if (uri.startsWith("data:")) return uri;
+  if (uri.startsWith("data:") && !forzar) return uri; // ya reducida (con forzar = true se vuelve a reducir)
   let base64;
   try {
     const contexto = ImageManipulator.manipulate(uri);

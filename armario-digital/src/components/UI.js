@@ -98,7 +98,7 @@ export function HeartButton({ favorito, onPress, size = 28, iconSize = 14 }) {
 }
 
 // El margen superior del estado/notch lo gestiona el SafeAreaView de App.js.
-export function TopBar({ title, onBack, right }) {
+export function TopBar({ title, onBack, right, onTitlePress }) {
   const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 12, paddingBottom: 12 }}>
@@ -108,7 +108,13 @@ export function TopBar({ title, onBack, right }) {
             <Ionicons name="arrow-back" size={22} color={colors.ink} />
           </TouchableOpacity>
         )}
-        <Text style={{ fontSize: 24, fontWeight: "500", color: colors.ink, fontFamily: "display" }}>{title}</Text>
+        {onTitlePress ? (
+          <TouchableOpacity onPress={onTitlePress} hitSlop={8} style={{ flexShrink: 1 }}>
+            <Text numberOfLines={1} style={{ fontSize: 24, fontWeight: "500", color: colors.ink, fontFamily: "display" }}>{title}</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={{ fontSize: 24, fontWeight: "500", color: colors.ink, fontFamily: "display" }}>{title}</Text>
+        )}
       </View>
       {right}
     </View>

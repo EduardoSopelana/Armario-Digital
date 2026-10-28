@@ -15,6 +15,7 @@ import { doc, getDoc, setDoc, updateDoc, writeBatch, runTransaction, serverTimes
 import { auth, db, firebaseConfigurado } from "../firebase";
 import { getJSON, setJSON, removeKey } from "../storage";
 import { aBase64Reducida } from "../images";
+import { guardarTelefono } from "./contactsService";
 
 const CACHE = "perfilCache"; // último perfil conocido (para abrir la app sin conexión)
 const NOTIF_POR_DEFECTO = { prendaAmigo: true, mensajes: true };
@@ -74,8 +75,11 @@ async function cargarPerfil(user) {
     foto: d.foto || null, // miniatura guardada en el perfil público
     authMethod: "email",
     privacidadConjuntos: d.privacidadConjuntos || "publico",
+    mensajesDe: d.mensajesDe || "normal",
     dosPasos: false, // la verificación en dos pasos real llegará más adelante
     notificaciones: priv.exists() ? { ...NOTIF_POR_DEFECTO, ...priv.data().notificaciones } : NOTIF_POR_DEFECTO,
+    telefono: priv.exists() ? priv.data().telefono || null : null,
+    telefonoDescubrible: priv.exists() ? priv.data().telefonoDescubrible !== false : true,
     fechaRegistro: d.createdAt?.toDate?.().toISOString() || null,
   };
   await setJSON(CACHE, perfil);
@@ -125,6 +129,7 @@ export async function signUp({ nombre, alias, email, password }) {
       nombre: nombre || "Sin nombre",
       alias: aliasLimpio,
       privacidadConjuntos: "publico",
+      mensajesDe: "normal",
       createdAt: serverTimestamp(),
     });
     batch.set(doc(db, "users", uid, "private", "settings"), { notificaciones: NOTIF_POR_DEFECTO });
@@ -136,8 +141,8 @@ export async function signUp({ nombre, alias, email, password }) {
 
   const perfil = {
     id: uid, nombre: nombre || "Sin nombre", alias: aliasLimpio, email: cred.user.email, foto: null,
-    authMethod: "email", privacidadConjuntos: "publico", dosPasos: false,
-    notificaciones: NOTIF_POR_DEFECTO, fechaRegistro: new Date().toISOString(),
+    authMethod: "email", privacidadConjuntos: "publico", mensajesDe: "normal", dosPasos: false,
+    notificaciones: NOTIF_POR_DEFECTO, telefono: null, telefonoDescubrible: true, fechaRegistro: new Date().toISOString(),
   };
   await setJSON(CACHE, perfil);
   return perfil;
@@ -226,9 +231,17 @@ export async function updateProfile(perfil, cambios) {
     }
     if (cambios.nombre !== undefined) publicos.nombre = cambios.nombre;
     if (cambios.privacidadConjuntos !== undefined) publicos.privacidadConjuntos = cambios.privacidadConjuntos;
+    if (cambios.mensajesDe !== undefined) publicos.mensajesDe = cambios.mensajesDe;
     if (Object.keys(publicos).length > 0) {
       await updateDoc(doc(db, "users", uid), publicos);
       Object.assign(nuevo, publicos);
+    }
+    if (cambios.telefono !== undefined || cambios.telefonoDescubrible !== undefined) {
+      const telefono = cambios.telefono !== undefined ? cambios.telefono : perfil.telefono;
+      const descubrible = cambios.telefonoDescubrible !== undefined ? cambios.telefonoDescubrible : perfil.telefonoDescubrible;
+      await guardarTelefono(uid, perfil, telefono, descubrible);
+      nuevo.telefono = telefono;
+      nuevo.telefonoDescubrible = descubrible;
     }
     if (cambios.notificaciones) {
       await setDoc(doc(db, "users", uid, "private", "settings"), { notificaciones: cambios.notificaciones }, { merge: true });

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, StatusBar, ActivityIndicator, Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import { Fraunces_500Medium, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
@@ -11,7 +12,7 @@ import { confirmarEliminar } from "./src/confirm";
 import { borrarTodasLasFotos } from "./src/images";
 import { getCurrentUser, updateProfile, signOut } from "./src/services/authService";
 import { escucharRelaciones } from "./src/services/friendsService";
-import { getAllMessages, sendMessage } from "./src/services/messagesService";
+import { escucharChats } from "./src/services/messagesService";
 import * as nube from "./src/services/wardrobeService";
 
 import Text from "./src/components/Text";
@@ -30,11 +31,13 @@ import OutfitDetailSheet from "./src/screens/OutfitDetailSheet";
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <SafeAreaProvider>
-        <AppContent />
-      </SafeAreaProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <AppContent />
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -52,7 +55,8 @@ function AppContent() {
   const [migrando, setMigrando] = useState(null);     // { hecho, total } mientras se suben datos del móvil
   const [usuario, setUsuario] = useState(null);
   const [relaciones, setRelaciones] = useState([]); // a quién sigo y quién me sigue (en tiempo real)
-  const [mensajes, setMensajes] = useState({});
+  const [chats, setChats] = useState([]); // conversaciones (en tiempo real)
+  const [chatAbrirCon, setChatAbrirCon] = useState(null); // perfil con el que abrir un chat al ir a Mensajes
   const [cargado, setCargado] = useState(false);
 
   const [modalAddPrenda, setModalAddPrenda] = useState(false);
@@ -66,6 +70,7 @@ function AppContent() {
 
   const errorMostrado = useRef(false);
   const errorRelacionesMostrado = useRef(false);
+  const errorChatsMostrado = useRef(false);
   const migracionComprobada = useRef(null);
 
   const avisarError = (e) => Alert.alert("Algo ha fallado", e?.message || "Inténtalo de nuevo.");
@@ -74,7 +79,6 @@ function AppContent() {
   useEffect(() => {
     (async () => {
       setUsuario(await getCurrentUser());
-      setMensajes(await getAllMessages());
       setCargado(true);
     })();
   }, []);
@@ -126,13 +130,26 @@ function AppContent() {
     });
   }, [usuario?.id]);
 
-  // Personas con las que hay una relación aceptada en cualquier sentido (se usa en Mensajes)
-  const contactosIds = useMemo(
-    () => relaciones.filter((r) => r.yoSigo === "accepted" || r.meSigue === "accepted").map((r) => r.otroUid),
-    [relaciones]
-  );
   // Personas que han pedido seguirme y aún no he aceptado
   const pendientes = useMemo(() => relaciones.filter((r) => r.meSigue === "pending").length, [relaciones]);
+
+  /* ---------- conversaciones: se escuchan en tiempo real ---------- */
+  useEffect(() => {
+    if (!usuario?.id) { setChats([]); return; }
+    errorChatsMostrado.current = false;
+    return escucharChats(usuario.id, setChats, (e) => {
+      if (!errorChatsMostrado.current) {
+        errorChatsMostrado.current = true;
+        Alert.alert("No se pudieron cargar tus mensajes", e.message);
+      }
+    });
+  }, [usuario?.id]);
+
+  // Solicitudes de mensajes: alguien me ha escrito sin seguimiento mutuo y aún no he aceptado
+  const solicitudesChat = useMemo(
+    () => chats.filter((c) => c.estado === "pendiente" && c.iniciador !== usuario?.id).length,
+    [chats, usuario?.id]
+  );
 
   /* ---------- lo que había guardado solo en el móvil se ofrece subir a la cuenta ---------- */
   useEffect(() => {
@@ -194,9 +211,24 @@ function AppContent() {
   const resetTodo = () => { nube.borrarTodo(usuario.id).catch(avisarError); };
 
   /* ---------- Amigos y mensajes ---------- */
-  const enviarMensaje = async (amigoId, texto, adjunto) => {
-    setMensajes(await sendMessage(mensajes, amigoId, texto, adjunto));
+  // Desde el perfil de alguien: ir a Mensajes con esa conversación abierta
+  const abrirChat = (perfil) => {
+    setChatAbrirCon(perfil);
+    navegar("mensajes");
   };
+
+  // Deslizar a izquierda o derecha cambia al menú de al lado (solo en las pantallas de la barra inferior)
+  const ORDEN_MENUS = ["inicio", "armario", "crear", "conjuntos", "perfil"];
+  const deslizarMenu = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-40, 40])
+    .failOffsetY([-25, 25])
+    .onEnd((e) => {
+      const i = ORDEN_MENUS.indexOf(screen);
+      if (i < 0 || Math.abs(e.translationX) < 90 || Math.abs(e.velocityX) < 300) return;
+      const siguiente = ORDEN_MENUS[i + (e.translationX < 0 ? 1 : -1)];
+      if (siguiente) navegar(siguiente);
+    });
 
   /* ---------- Prendas ---------- */
   const guardarPrenda = (prenda) => {
@@ -297,6 +329,7 @@ function AppContent() {
 
       {/* SafeAreaView solo en la parte de arriba: así el menú inferior puede bajar hasta el borde */}
       <SafeAreaView edges={["top"]} style={{ flex: 1 }}>
+        <GestureDetector gesture={deslizarMenu}>
         <View style={{ flex: 1 }}>
           {screen === "inicio" && (
             <InicioScreen
@@ -308,6 +341,7 @@ function AppContent() {
               onToggleFavoritoConjunto={toggleFavoritoConjunto}
               onAbrirFavoritos={() => navegar("favoritos")}
               onAbrirMensajes={() => navegar("mensajes")}
+              badgeMensajes={solicitudesChat > 0}
             />
           )}
           {screen === "armario" && (
@@ -351,11 +385,13 @@ function AppContent() {
           )}
           {screen === "mensajes" && (
             <MensajesScreen
-              amigos={contactosIds}
-              mensajes={mensajes}
+              chats={chats}
+              relaciones={relaciones}
+              miUid={usuario.id}
               prendas={prendas}
               conjuntos={conjuntos}
-              onEnviar={enviarMensaje}
+              abrirCon={chatAbrirCon}
+              onAbierto={() => setChatAbrirCon(null)}
               onBack={() => navegar("inicio")}
               onHiloChange={setOcultarNav}
             />
@@ -370,12 +406,14 @@ function AppContent() {
               pendientes={pendientes}
               miUid={usuario.id}
               onVerCategoria={(id) => { setCategoriaParaArmario(id); navegar("armario"); }}
+              onAbrirChat={abrirChat}
               onActualizarUsuario={actualizarUsuario}
               onCerrarSesion={cerrarSesion}
               onReset={resetTodo}
             />
           )}
         </View>
+        </GestureDetector>
       </SafeAreaView>
 
       {!ocultarNav && <BottomNav screen={screen} onNav={navegar} compact={false} badges={{ perfil: pendientes > 0 }} />}

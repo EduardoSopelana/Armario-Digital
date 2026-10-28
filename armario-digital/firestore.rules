@@ -2,29 +2,223 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Perfil público: cualquier usuario con sesión puede leerlo (para buscar amigos).
+    function identificado() {
+      return request.auth != null;
+    }
+
+    function esDueno(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // "seguidor" sigue a "seguido" (seguimiento ACEPTADO). El documento se llama seguidor_seguido.
+    function sigueA(seguidor, seguido) {
+      let id = seguidor + '_' + seguido;
+      return exists(/databases/$(database)/documents/follows/$(id))
+          && get(/databases/$(database)/documents/follows/$(id)).data.status == 'accepted';
+    }
+
+    // Puede ver el armario de "dueno": él mismo, cualquiera si su perfil es público,
+    // o quien le sigue (con la solicitud aceptada).
+    function puedeVerArmario(dueno) {
+      return esDueno(dueno)
+          || get(/databases/$(database)/documents/users/$(dueno)).data.get('privacidadConjuntos', 'publico') == 'publico'
+          || sigueA(request.auth.uid, dueno);
+    }
+
+    // ----- Ayudas para los mensajes -----
+    function sonMutuos(a, b) {
+      return sigueA(a, b) && sigueA(b, a);
+    }
+
+    function perfilPublico(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function esPublico(uid) {
+      return perfilPublico(uid).get('privacidadConjuntos', 'publico') == 'publico';
+    }
+
+    // Ajuste "quién puede escribirme": 'normal' | 'mutuos' | 'todos'
+    function ajusteMensajes(uid) {
+      return perfilPublico(uid).get('mensajesDe', 'normal');
+    }
+
+    // Si el destinatario solo admite seguimiento mutuo y no lo hay, no puede escribirle
+    function bloqueado(emisor, receptor) {
+      return ajusteMensajes(receptor) == 'mutuos' && !sonMutuos(emisor, receptor);
+    }
+
+    // Conversación sin límite: seguimiento mutuo, destinatario público o que admite a cualquiera
+    function conversacionLibre(emisor, receptor) {
+      return sonMutuos(emisor, receptor) || esPublico(receptor) || ajusteMensajes(receptor) == 'todos';
+    }
+
+    function otroDe(users) {
+      return users[0] == request.auth.uid ? users[1] : users[0];
+    }
+
+    // Perfil público: cualquier usuario con sesión puede leerlo (para buscar personas).
     // Solo su dueño puede crearlo o modificarlo. No contiene el correo.
     match /users/{uid} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow read: if identificado();
+      allow create, update: if esDueno(uid);
       allow delete: if false;
 
       // Ajustes privados (notificaciones...): solo el dueño
       match /private/{doc} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if esDueno(uid);
+      }
+
+      // Armario: escribe solo su dueño; lo ven él, quien le sigue y, si el perfil es público, cualquiera
+      match /prendas/{prendaId} {
+        allow read: if identificado() && puedeVerArmario(uid);
+        allow write: if esDueno(uid);
+      }
+      match /conjuntos/{conjuntoId} {
+        allow read: if identificado() && puedeVerArmario(uid);
+        allow write: if esDueno(uid);
       }
     }
 
     // Alias únicos: el documento aliases/{alias} guarda quién lo tiene.
     // "create" solo funciona si el documento NO existe, y eso garantiza que no haya dos iguales.
     match /aliases/{alias} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow read: if identificado();
+      allow create: if identificado()
                     && alias.matches('^[a-z0-9._]{3,20}$')
                     && request.resource.data.keys().hasOnly(['uid'])
                     && request.resource.data.uid == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow delete: if identificado() && resource.data.uid == request.auth.uid;
       allow update: if false;
+    }
+
+    // Conversaciones: chats/{uidA_uidB} con
+    //   { users: [A, B], estado: 'abierta' | 'pendiente' | 'rechazada', iniciador, enviados, ultimo, actualizado }
+    // - 'abierta': sin límite. 'pendiente': quien escribió primero (iniciador) solo puede enviar 2 mensajes
+    //   hasta que la otra persona acepte. 'rechazada': el iniciador no puede enviar más.
+    // Estas reglas del servidor son las que hacen cumplir el límite; la app solo lo explica.
+    match /chats/{chatId} {
+      allow read: if identificado() && request.auth.uid in resource.data.users;
+
+      // Primer mensaje: crea la conversación (abierta si es libre; pendiente con 1 mensaje si no)
+      allow create: if identificado()
+                    && request.resource.data.keys().hasOnly(['users', 'estado', 'iniciador', 'enviados', 'ultimo', 'actualizado'])
+                    && request.resource.data.users.size() == 2
+                    && request.resource.data.users[0] < request.resource.data.users[1]
+                    && chatId == request.resource.data.users[0] + '_' + request.resource.data.users[1]
+                    && request.auth.uid in request.resource.data.users
+                    && request.resource.data.iniciador == request.auth.uid
+                    && request.resource.data.actualizado == request.time
+                    && request.resource.data.ultimo.de == request.auth.uid
+                    && !bloqueado(request.auth.uid, otroDe(request.resource.data.users))
+                    && (conversacionLibre(request.auth.uid, otroDe(request.resource.data.users))
+                          ? (request.resource.data.estado == 'abierta' && request.resource.data.enviados == 0)
+                          : (request.resource.data.estado == 'pendiente' && request.resource.data.enviados == 1));
+
+      allow update: if identificado()
+                    && request.auth.uid in resource.data.users
+                    && request.resource.data.users == resource.data.users
+                    && request.resource.data.iniciador == resource.data.iniciador
+                    && (
+                      // A) mensaje en una conversación abierta
+                      (resource.data.estado == 'abierta' && request.resource.data.estado == 'abierta'
+                        && request.resource.data.enviados == resource.data.enviados
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo', 'actualizado']))
+                      // B) quien escribió primero envía otro mensaje sin aceptar (máximo 2)
+                      || (resource.data.estado == 'pendiente' && request.auth.uid == resource.data.iniciador
+                        && request.resource.data.estado == 'pendiente'
+                        && resource.data.enviados < 2
+                        && request.resource.data.enviados == resource.data.enviados + 1
+                        && !bloqueado(request.auth.uid, otroDe(resource.data.users))
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enviados', 'ultimo', 'actualizado']))
+                      // C) si hay seguimiento mutuo, la conversación se abre
+                      || (resource.data.estado != 'abierta' && request.resource.data.estado == 'abierta'
+                        && sonMutuos(request.auth.uid, otroDe(resource.data.users))
+                        && request.resource.data.enviados == resource.data.enviados
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'ultimo', 'actualizado']))
+                      // D) quien recibe acepta (o responde, lo que equivale a aceptar)
+                      || (request.auth.uid != resource.data.iniciador
+                        && request.resource.data.estado == 'abierta'
+                        && request.resource.data.enviados == resource.data.enviados
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'ultimo', 'actualizado']))
+                      // E) quien recibe rechaza
+                      || (request.auth.uid != resource.data.iniciador
+                        && resource.data.estado == 'pendiente'
+                        && request.resource.data.estado == 'rechazada'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado']))
+                    );
+
+      allow delete: if false;
+
+      // Cada mensaje debe ir en el MISMO envío que la actualización de la conversación (así se aplica el límite)
+      match /mensajes/{mensajeId} {
+        allow read: if identificado()
+                    && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.users;
+        allow create: if identificado()
+                      && request.resource.data.keys().hasOnly(['de', 'texto', 'adjunto', 'fecha'])
+                      && request.resource.data.de == request.auth.uid
+                      && request.resource.data.fecha == request.time
+                      && request.resource.data.texto is string
+                      && request.resource.data.texto.size() <= 2000
+                      && request.auth.uid in getAfter(/databases/$(database)/documents/chats/$(chatId)).data.users
+                      && getAfter(/databases/$(database)/documents/chats/$(chatId)).data.actualizado == request.time
+                      && getAfter(/databases/$(database)/documents/chats/$(chatId)).data.ultimo.de == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // Índice de teléfonos: phoneIndex/{huella SHA-256 del número} -> { uid }.
+    // Solo se puede leer UN documento si ya conoces su huella (nunca listar el índice entero),
+    // y solo se puede crear si no existe. Nunca contiene el número en claro.
+    match /phoneIndex/{huella} {
+      allow get: if identificado();
+      allow list: if false;
+      allow create: if identificado()
+                    && huella.matches('^[a-f0-9]{64}$')
+                    && request.resource.data.keys().hasOnly(['uid'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if identificado() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Seguimientos: follows/{seguidor_seguido} con
+    //   { users: [seguidor, seguido], follower, followed, status: "pending" | "accepted", createdAt }
+    // Es unidireccional: que A siga a B no significa que B siga a A.
+    match /follows/{followId} {
+      // Lo ven los dos implicados. Además, si hay seguimiento mutuo con una de las dos personas,
+      // se pueden consultar sus seguimientos ACEPTADOS (para ver sus seguidores y a quién sigue).
+      allow read: if identificado() && (
+                    request.auth.uid in resource.data.users
+                    || (resource.data.status == 'accepted'
+                        && (sonMutuos(request.auth.uid, resource.data.follower)
+                            || sonMutuos(request.auth.uid, resource.data.followed)))
+                  );
+
+      // Solo puedes seguir a alguien en tu nombre. Si su perfil es privado, siempre como solicitud
+      // PENDIENTE; si es público, el seguimiento puede crearse ya aceptado (como en Instagram).
+      allow create: if identificado()
+                    && request.resource.data.keys().hasOnly(['users', 'follower', 'followed', 'status', 'createdAt'])
+                    && request.resource.data.users.size() == 2
+                    && request.resource.data.users[0] == request.resource.data.follower
+                    && request.resource.data.users[1] == request.resource.data.followed
+                    && request.resource.data.follower == request.auth.uid
+                    && request.resource.data.follower != request.resource.data.followed
+                    && followId == request.resource.data.follower + '_' + request.resource.data.followed
+                    && (
+                         request.resource.data.status == 'pending'
+                         || (request.resource.data.status == 'accepted'
+                             && get(/databases/$(database)/documents/users/$(request.resource.data.followed)).data.get('privacidadConjuntos', 'publico') == 'publico')
+                       );
+
+      // Solo quien RECIBE la solicitud puede aceptarla, y solo se puede cambiar el estado
+      allow update: if identificado()
+                    && request.auth.uid == resource.data.followed
+                    && resource.data.status == 'pending'
+                    && request.resource.data.status == 'accepted'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+
+      // Cualquiera de los dos puede borrarlo (rechazar, cancelar, dejar de seguir o quitar un seguidor)
+      allow delete: if identificado() && request.auth.uid in resource.data.users;
     }
   }
 }

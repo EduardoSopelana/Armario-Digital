@@ -1,12 +1,20 @@
 import React, { useState } from "react";
-import { View, TextInput, ScrollView, Alert } from "react-native";
+import { View, TextInput, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { pedirFoto } from "../imagePicker";
 import Text from "../components/Text";
 import { TopBar, Pill, PrimaryButton, GhostButton, FieldLabel, Sheet, useInputStyle } from "../components/UI";
 import { MenuRow, SwitchRow, Card } from "../components/MenuRow";
 import { confirmarAccion } from "../confirm";
 import { changePassword, validarAlias, normalizarAlias } from "../services/authService";
+import { normalizarTelefono } from "../services/contactsService";
 import { useTheme } from "../theme";
+
+const OPCIONES_MENSAJES = [
+  { id: "normal", titulo: "Normal", detalle: "Quien no tenga seguimiento mutuo contigo puede enviarte 2 mensajes si tu perfil es privado, hasta que aceptes chatear. Si tu perfil es público, cualquiera puede escribirte." },
+  { id: "mutuos", titulo: "Solo seguimiento mutuo", detalle: "Solo pueden escribirte las personas a las que sigues y que te siguen. Nadie más, ni siquiera 2 mensajes." },
+  { id: "todos", titulo: "Cualquiera", detalle: "Cualquiera puede escribirte sin límite de mensajes y sin que tengas que aceptar nada." },
+];
 
 export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSesion, onReset, onBack }) {
   const { colors, tema, setTema } = useTheme();
@@ -59,6 +67,43 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
     }
   };
 
+  const [telefonoTexto, setTelefonoTexto] = useState("");
+  const [descubrible, setDescubrible] = useState(true);
+  const [errorTelefono, setErrorTelefono] = useState("");
+
+  const abrirTelefono = () => {
+    setTelefonoTexto(usuario.telefono || "");
+    setDescubrible(usuario.telefonoDescubrible !== false);
+    setErrorTelefono("");
+    setEditando("telefono");
+  };
+
+  const guardarTelefonoSheet = async () => {
+    const normalizado = normalizarTelefono(telefonoTexto);
+    if (!normalizado) { setErrorTelefono("Escribe un número válido, por ejemplo +34 612 345 678."); return; }
+    setGuardando(true);
+    try {
+      await onActualizarUsuario({ telefono: normalizado, telefonoDescubrible: descubrible });
+      setEditando(null);
+    } catch (e) {
+      setErrorTelefono(e.message || "No se pudo guardar el número.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const quitarTelefono = async () => {
+    setGuardando(true);
+    try {
+      await onActualizarUsuario({ telefono: null });
+      setEditando(null);
+    } catch (e) {
+      setErrorTelefono(e.message || "No se pudo quitar el número.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   const abrirPassword = () => { setPassActual(""); setPass1(""); setPass2(""); setErrorPass(""); setEditando("password"); };
 
   const guardarPassword = async () => {
@@ -86,17 +131,22 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
       <Card style={{ marginBottom: 22 }}>
         <MenuRow icon="camera-outline" label="Cambiar foto de perfil" sub="Galería o cámara" onPress={cambiarFoto} />
         <MenuRow icon="person-outline" label="Cambiar alias" sub={`@${usuario.alias}`} onPress={abrirAlias} />
+        <MenuRow icon="call-outline" label="Número de teléfono" sub={usuario.telefono || "Sin añadir"} onPress={abrirTelefono} />
         <MenuRow icon="key-outline" label="Contraseña y seguridad" sub={usuario.email} onPress={abrirPassword} last />
       </Card>
 
       <FieldLabel>Privacidad</FieldLabel>
       <Card style={{ marginBottom: 22 }}>
         <SwitchRow
-          label="Perfil público"
-          sub="Si lo desactivas, solo quienes te sigan podrán ver tus conjuntos"
-          value={usuario.privacidadConjuntos === "publico"}
-          onChange={(v) => actualizar({ privacidadConjuntos: v ? "publico" : "privado" })}
-          last
+          label="Perfil privado"
+          sub="Si lo activas, solo quienes te sigan (con tu aprobación) podrán ver tus conjuntos"
+          value={usuario.privacidadConjuntos === "privado"}
+          onChange={(v) => actualizar({ privacidadConjuntos: v ? "privado" : "publico" })}
+        />
+        <MenuRow
+          icon="chatbubble-ellipses-outline" label="Quién puede escribirme"
+          sub={(OPCIONES_MENSAJES.find((o) => o.id === (usuario.mensajesDe || "normal")) || OPCIONES_MENSAJES[0]).titulo}
+          onPress={() => setEditando("mensajes")} last
         />
       </Card>
 
@@ -151,6 +201,59 @@ export default function ConfigScreen({ usuario, onActualizarUsuario, onCerrarSes
           />
           {!!errorAlias && <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 10 }}>{errorAlias}</Text>}
           <PrimaryButton onPress={guardarAlias} disabled={guardando}>{guardando ? "Guardando..." : "Guardar"}</PrimaryButton>
+        </Sheet>
+      )}
+
+      {editando === "mensajes" && (
+        <Sheet title="Quién puede escribirme" onClose={() => setEditando(null)}>
+          <View style={{ gap: 10 }}>
+            {OPCIONES_MENSAJES.map((o) => {
+              const activa = (usuario.mensajesDe || "normal") === o.id;
+              return (
+                <TouchableOpacity
+                  key={o.id}
+                  onPress={async () => { if (await actualizar({ mensajesDe: o.id })) setEditando(null); }}
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1,
+                    borderColor: activa ? colors.accent : colors.line, backgroundColor: activa ? colors.accentSofter : colors.surface,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14.5, fontWeight: "500" }}>{o.titulo}</Text>
+                    <Text style={{ fontSize: 12, color: colors.inkSoft, lineHeight: 17, marginTop: 2 }}>{o.detalle}</Text>
+                  </View>
+                  {activa && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Sheet>
+      )}
+
+      {editando === "telefono" && (
+        <Sheet title="Número de teléfono" onClose={() => setEditando(null)}>
+          <TextInput
+            value={telefonoTexto} onChangeText={(t) => { setTelefonoTexto(t); setErrorTelefono(""); }}
+            keyboardType="phone-pad" placeholder="+34 612 345 678" placeholderTextColor={colors.inkFaint}
+            style={[inputStyle, { marginBottom: 8 }]}
+          />
+          <Text style={{ fontSize: 12, color: colors.inkSoft, lineHeight: 17, marginBottom: 14 }}>
+            Si no escribes prefijo de país, se usa +34. Nadie verá tu número: solo sirve para que quienes te tengan en sus contactos te encuentren. Todavía no se verifica por SMS.
+          </Text>
+          <Card style={{ marginBottom: 14 }}>
+            <SwitchRow
+              label="Permitir que mis contactos me encuentren"
+              sub="Aparecerás como sugerencia a quien tenga tu número guardado"
+              value={descubrible} onChange={setDescubrible} last
+            />
+          </Card>
+          {!!errorTelefono && <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 12 }}>{errorTelefono}</Text>}
+          <PrimaryButton onPress={guardarTelefonoSheet} disabled={guardando}>{guardando ? "Guardando..." : "Guardar número"}</PrimaryButton>
+          {!!usuario.telefono && (
+            <GhostButton onPress={quitarTelefono} style={{ marginTop: 10 }} icon="trash-outline" iconColor={colors.danger} textStyle={{ color: colors.danger }}>
+              Quitar número
+            </GhostButton>
+          )}
         </Sheet>
       )}
 

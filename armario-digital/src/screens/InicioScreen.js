@@ -8,7 +8,7 @@ import { useTheme, useStyles } from "../theme";
 
 export default function InicioScreen({
   prendas, conjuntos, onNav, onAddPrenda, onOpenConjunto, onToggleFavoritoConjunto,
-  onAbrirFavoritos, onAbrirMensajes,
+  onAbrirFavoritos, onAbrirMensajes, badgeMensajes,
 }) {
   const { colors } = useTheme();
   const styles = useStyles(createStyles);
@@ -21,6 +21,7 @@ export default function InicioScreen({
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={onAbrirMensajes}>
             <Ionicons name="chatbubble-outline" size={18} color={colors.accent} />
+            {!!badgeMensajes && <View style={styles.dot} />}
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={onAbrirFavoritos}>
             <Ionicons name="heart-outline" size={18} color={colors.accent} />
@@ -66,6 +67,7 @@ const createStyles = (c) => StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 12 },
   title: { fontSize: 26, fontWeight: "500", color: c.ink, fontFamily: "display" },
   iconBtn: { width: 38, height: 38, borderRadius: 999, borderWidth: 1, borderColor: c.line, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" },
+  dot: { position: "absolute", top: 7, right: 8, width: 10, height: 10, borderRadius: 999, backgroundColor: "#E53950", borderWidth: 1.5, borderColor: c.surface },
   subtitle: { color: c.inkSoft, fontSize: 14.5, marginTop: 4, marginBottom: 20 },
   statsRow: { flexDirection: "row", gap: 12, marginBottom: 26 },
   statCard: { flex: 1, backgroundColor: c.surface, borderWidth: 1, borderColor: c.line, borderRadius: 14, padding: 14 },

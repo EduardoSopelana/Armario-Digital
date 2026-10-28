@@ -16,7 +16,7 @@ import { useStyles } from "../theme";
 // se vuelve al menú principal.
 export default function PerfilScreen({
   prendas, conjuntos, usuario, relaciones, pendientes, miUid,
-  onVerCategoria, onActualizarUsuario, onCerrarSesion, onReset,
+  onVerCategoria, onActualizarUsuario, onCerrarSesion, onReset, onAbrirChat,
 }) {
   const styles = useStyles(createStyles);
   const [vista, setVista] = useState("menu"); // menu | categorias | amigos | siguiendo | seguidores | config
@@ -62,9 +62,10 @@ export default function PerfilScreen({
         {!!perfilAbierto && (
           <PerfilAmigoScreen
             perfil={perfilAbierto}
-            rel={relaciones.find((r) => r.otroUid === perfilAbierto.id)}
+            relaciones={relaciones}
             miUid={miUid}
             onBack={() => setPerfilAbierto(null)}
+            onMensaje={onAbrirChat}
           />
         )}
       </View>

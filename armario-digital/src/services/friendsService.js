@@ -20,6 +20,7 @@ function aPerfil(uid, d) {
     nombre: d.nombre,
     foto: d.foto || null,
     privacidadConjuntos: d.privacidadConjuntos || "publico",
+    mensajesDe: d.mensajesDe || "normal",
   };
   cachePerfiles.set(uid, perfil);
   return perfil;
@@ -46,6 +47,38 @@ export function escucharRelaciones(miUid, onData, onError) {
         porPersona.set(otroUid, rel);
       });
       onData([...porPersona.values()]);
+    },
+    (e) => onError(traducirFirestore(e))
+  );
+}
+
+// Escucha en tiempo real el perfil público de una persona (por ejemplo, si cambia su privacidad)
+export function escucharPerfil(uid, onData, onError) {
+  return onSnapshot(
+    doc(db, "users", uid),
+    (snap) => { if (snap.exists()) onData(aPerfil(uid, snap.data())); },
+    (e) => onError(traducirFirestore(e))
+  );
+}
+
+// Escucha en tiempo real quién sigue a una persona ("seguidores") o a quién sigue ("siguiendo").
+// Las reglas solo lo permiten si hay seguimiento mutuo con esa persona; si no, devuelve permission-denied.
+// (Para mis propias listas se usan las relaciones, no esta función.)
+export function escucharSeguimientos(uid, tipo, onData, onError) {
+  const campo = tipo === "seguidores" ? "followed" : "follower";
+  const q = query(collection(db, "follows"), where(campo, "==", uid), where("status", "==", "accepted"));
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(
+        snap.docs.map((d) => {
+          const x = d.data();
+          return {
+            otroUid: tipo === "seguidores" ? x.follower : x.followed,
+            fecha: x.createdAt?.toMillis ? x.createdAt.toMillis() : 0,
+          };
+        })
+      );
     },
     (e) => onError(traducirFirestore(e))
   );
